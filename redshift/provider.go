@@ -52,6 +52,7 @@ func Provider() terraform.ResourceProvider {
 			"redshift_database":               redshiftDatabase(),
 			"redshift_schema":                 redshiftSchema(),
 			"redshift_group_schema_privilege": redshiftSchemaGroupPrivilege(),
+			"redshift_user_schema_privilege":  redshiftUserGroupPrivilege(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"redshift_schema": dataSourceRedshiftSchema(),
