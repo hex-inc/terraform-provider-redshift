@@ -97,7 +97,7 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 		return schemaErr
 	}
 
-	if isSystemSchema(schemaOwner) {
+	if isSystemSchema(schemaOwner) && schemaName != "public" {
 		tx.Rollback()
 		return NewError("Privilege creation is not allowed for system schemas, schema=" + schemaName)
 	}
