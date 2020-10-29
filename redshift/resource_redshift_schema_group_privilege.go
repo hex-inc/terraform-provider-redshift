@@ -119,7 +119,7 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 	grants := validateGrants(d)
 	schemaGrants := validateSchemaGrants(d)
 
-	if len(grants) == 0 && len(schemaGrants) == 0  {
+	if len(grants) == 0 && len(schemaGrants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
@@ -131,7 +131,7 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 		return schemaErr
 	}
 
-	if isSystemSchema(schemaOwner) {
+	if isSystemSchema(schemaOwner) && schemaName != "public" {
 		tx.Rollback()
 		return NewError("Privilege creation is not allowed for system schemas, schema=" + schemaName)
 	}
@@ -203,8 +203,8 @@ func resourceRedshiftSchemaGroupPrivilegeRead(d *schema.ResourceData, meta inter
 
 func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error {
 	var (
-		usagePrivilege		bool
-		createPrivilege		bool
+		usagePrivilege      bool
+		createPrivilege     bool
 		selectPrivilege     bool
 		updatePrivilege     bool
 		insertPrivilege     bool
@@ -233,14 +233,14 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 	}
 
 	var hasSchemaPrivilegeQuery = `
-			select 
-			case 
-				when charindex('U',split_part(split_part(array_to_string(nspacl, '|'), 'group ' || pu.groname,2 ) ,'/',1)) > 0 then 1 
-				else 0 
+			select
+			case
+				when charindex('U',split_part(split_part(array_to_string(nspacl, '|'), 'group ' || pu.groname,2 ) ,'/',1)) > 0 then 1
+				else 0
 			end as usage,
-			case 
-				when charindex('C',split_part(split_part(array_to_string(nspacl, '|'),'group ' || pu.groname,2 ) ,'/',1)) > 0 then 1 
-				else 0 
+			case
+				when charindex('C',split_part(split_part(array_to_string(nspacl, '|'),'group ' || pu.groname,2 ) ,'/',1)) > 0 then 1
+				else 0
 			end as create
 			from pg_group pu, pg_namespace nsp
 			where array_to_string(nsp.nspacl, '|') LIKE '%' || 'group ' || pu.groname || '=%'
@@ -276,7 +276,7 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 	grants := validateGrants(d)
 	schemaGrants := validateSchemaGrants(d)
 
-	if len(grants) == 0 && len(schemaGrants) == 0  {
+	if len(grants) == 0 && len(schemaGrants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
