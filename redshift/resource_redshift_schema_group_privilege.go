@@ -190,11 +190,11 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 	var (
 		usagePrivilege      bool
 		createPrivilege     bool
-		selectPrivilege     int
-		updatePrivilege     int
-		insertPrivilege     int
-		deletePrivilege     int
-		referencesPrivilege int
+		selectPrivilege     float32
+		updatePrivilege     float32
+		insertPrivilege     float32
+		deletePrivilege     float32
+		referencesPrivilege float32
 	)
 
 	var hasSchemaPrivilegeQuery = `
@@ -224,11 +224,11 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 
 	var hasTablePrivilegeQuery = `
 		SELECT
-			coalesce(floor(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "select",
-			coalesce(floor(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "update",
-			coalesce(floor(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "insert",
-			coalesce(floor(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "delete",
-			coalesce(floor(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "references"
+			coalesce(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1)), 0.5) AS "select",
+			coalesce(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1)), 0.5) AS "update",
+			coalesce(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1)), 0.5) AS "insert",
+			coalesce(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1)), 0.5) AS "delete",
+			coalesce(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1)), 0.5) AS "references"
 		FROM
 			pg_user use
 			LEFT JOIN pg_class cls ON cls.relowner = use.usesysid
@@ -243,11 +243,45 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 		return tablePrivilegesError
 	}
 
-	d.Set("select", selectPrivilege == 1)
-	d.Set("insert", insertPrivilege == 1)
-	d.Set("update", updatePrivilege == 1)
-	d.Set("delete", deletePrivilege == 1)
-	d.Set("references", referencesPrivilege == 1)
+	if selectPrivilege >= 1 {
+		d.Set("select", true)
+	} else if selectPrivilege <= 0 {
+		d.Set("select", false)
+	} else {
+		d.Set("select", !d.Get("select").(bool))
+	}
+
+	if insertPrivilege >= 1 {
+		d.Set("insert", true)
+	} else if insertPrivilege <= 0 {
+		d.Set("insert", false)
+	} else {
+		d.Set("select", !d.Get("select").(bool))
+	}
+
+	if updatePrivilege >= 1 {
+		d.Set("update", true)
+	} else if updatePrivilege <= 0 {
+		d.Set("update", false)
+	} else {
+		d.Set("update", !d.Get("update").(bool))
+	}
+
+	if deletePrivilege >= 1 {
+		d.Set("delete", true)
+	} else if deletePrivilege <= 0 {
+		d.Set("delete", false)
+	} else {
+		d.Set("delete", !d.Get("delete").(bool))
+	}
+
+	if referencesPrivilege >= 1 {
+		d.Set("references", true)
+	} else if referencesPrivilege <= 0 {
+		d.Set("references", false)
+	} else {
+		d.Set("references", !d.Get("references").(bool))
+	}
 
 	return nil
 }
