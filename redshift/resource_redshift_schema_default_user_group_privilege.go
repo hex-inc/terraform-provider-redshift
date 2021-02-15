@@ -27,6 +27,11 @@ func redshiftSchemaDefaultUserGroupPrivilege() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"database": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
 			"schema_id": {
 				Type:     schema.TypeInt,
 				Required: true,
@@ -74,7 +79,12 @@ func redshiftSchemaDefaultUserGroupPrivilege() *schema.Resource {
 func resourceRedshiftSchemaDefaultUserGroupPrivilegeExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	// Exists - This is called to verify a resource still exists. It is called prior to Read,
 	// and lowers the burden of Read to be able to assume the resource exists.
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return false, dbErr
+	}
 
 	var privilegeId string
 
@@ -96,7 +106,12 @@ func resourceRedshiftSchemaDefaultUserGroupPrivilegeExists(d *schema.ResourceDat
 
 func resourceRedshiftSchemaDefaultUserGroupPrivilegeCreate(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	tx, txErr := redshiftClient.Begin()
 
@@ -162,7 +177,13 @@ func resourceRedshiftSchemaDefaultUserGroupPrivilegeCreate(d *schema.ResourceDat
 
 func resourceRedshiftSchemaDefaultUserGroupPrivilegeRead(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
+
 	tx, txErr := redshiftClient.Begin()
 	if txErr != nil {
 		panic(txErr)
@@ -219,7 +240,13 @@ func readRedshiftSchemaDefaultUserGroupPrivilege(d *schema.ResourceData, tx *sql
 }
 
 func resourceRedshiftSchemaDefaultUserGroupPrivilegeUpdate(d *schema.ResourceData, meta interface{}) error {
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
+
 	tx, txErr := redshiftClient.Begin()
 
 	if txErr != nil {
@@ -283,7 +310,12 @@ func resourceRedshiftSchemaDefaultUserGroupPrivilegeUpdate(d *schema.ResourceDat
 
 func resourceRedshiftSchemaDefaultUserGroupPrivilegeDelete(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 	tx, txErr := redshiftClient.Begin()
 
 	if txErr != nil {

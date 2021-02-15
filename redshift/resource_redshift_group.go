@@ -26,9 +26,15 @@ func redshiftGroup() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"group_name": { //This isn't immutable. The usesysid returned should be used as the id
+			"database": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
+			},
+			"group_name": { //This isn't immutable. The grosysid returned should be used as the id
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
 			},
 			//Pass usesysid as username can change
 			"users": {
@@ -43,7 +49,12 @@ func redshiftGroup() *schema.Resource {
 func resourceRedshiftGroupExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
 	// Exists - This is called to verify a resource still exists. It is called prior to Read,
 	// and lowers the burden of Read to be able to assume the resource exists.
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return false, dbErr
+	}
 
 	var name string
 
@@ -58,7 +69,12 @@ func resourceRedshiftGroupExists(d *schema.ResourceData, meta interface{}) (b bo
 }
 
 func resourceRedshiftGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	tx, txErr := redshiftClient.Begin()
 	if txErr != nil {
@@ -105,7 +121,12 @@ func resourceRedshiftGroupCreate(d *schema.ResourceData, meta interface{}) error
 
 func resourceRedshiftGroupRead(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	tx, txErr := redshiftClient.Begin()
 
@@ -163,7 +184,12 @@ func readRedshiftGroup(d *schema.ResourceData, tx *sql.Tx) error {
 
 func resourceRedshiftGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 	tx, txErr := redshiftClient.Begin()
 	if txErr != nil {
 		panic(txErr)
@@ -217,7 +243,12 @@ func resourceRedshiftGroupUpdate(d *schema.ResourceData, meta interface{}) error
 
 func resourceRedshiftGroupDelete(d *schema.ResourceData, meta interface{}) error {
 
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	//We need to drop all privileges and default privileges
 	rows, schemasError := client.Query("select nspname from pg_namespace")

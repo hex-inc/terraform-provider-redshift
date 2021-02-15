@@ -23,6 +23,10 @@ func redshiftDatabase() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"host_database_name": { // What database to connect to to manage this db
+				Type:     schema.TypeString,
+				Required: true,
+			},
 			"database_name": { //This isn't immutable. The datid returned should be used as the id
 				Type:     schema.TypeString,
 				Required: true,
@@ -44,7 +48,12 @@ func redshiftDatabase() *schema.Resource {
 func resourceRedshiftDatabaseExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
 	// Exists - This is called to verify a resource still exists. It is called prior to Read,
 	// and lowers the burden of Read to be able to assume the resource exists.
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("host_database_name").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return false, dbErr
+	}
 
 	var name string
 
@@ -60,7 +69,12 @@ func resourceRedshiftDatabaseExists(d *schema.ResourceData, meta interface{}) (b
 
 func resourceRedshiftDatabaseCreate(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("host_database_name").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	var createStatement string = "create database " + d.Get("database_name").(string)
 
@@ -101,7 +115,12 @@ func resourceRedshiftDatabaseCreate(d *schema.ResourceData, meta interface{}) er
 
 func resourceRedshiftDatabaseRead(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("host_database_name").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	err := readRedshiftDatabase(d, redshiftClient)
 
@@ -136,7 +155,12 @@ func readRedshiftDatabase(d *schema.ResourceData, db *sql.DB) error {
 
 func resourceRedshiftDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("host_database_name").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 	tx, txErr := redshiftClient.Begin()
 	if txErr != nil {
 		panic(txErr)
@@ -181,7 +205,12 @@ func resourceRedshiftDatabaseUpdate(d *schema.ResourceData, meta interface{}) er
 
 func resourceRedshiftDatabaseDelete(d *schema.ResourceData, meta interface{}) error {
 
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("host_database_name").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	_, err := client.Exec("drop database " + d.Get("database_name").(string))
 

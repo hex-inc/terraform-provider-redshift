@@ -12,38 +12,46 @@ type Config struct {
 	user     string
 	password string
 	port     string
-	database string
 	sslmode  string
 }
 
 type Client struct {
-	config Config
-	db     *sql.DB
+	config        Config
+	getConnection func(database string) (*sql.DB, error)
 }
 
 // New redshift client
-func (c *Config) Client() (*Client, error) {
+func (c *Config) Client() *Client {
 
-	conninfo := fmt.Sprintf("sslmode=%v user=%v password=%v host=%v port=%v dbname=%v",
-		c.sslmode,
-		c.user,
-		c.password,
-		c.url,
-		c.port,
-		c.database)
+	connections := make(map[string]*sql.DB)
 
-	db, err := sql.Open("postgres", conninfo)
-	if err != nil {
-		db.Close()
-		return nil, err
+	getConnection := func(database string) (*sql.DB, error) {
+		if connections[database] == nil {
+			conninfo := fmt.Sprintf("sslmode=%v user=%v password=%v host=%v port=%v dbname=%v",
+				c.sslmode,
+				c.user,
+				c.password,
+				c.url,
+				c.port,
+				database)
+
+			db, err := sql.Open("postgres", conninfo)
+			if err != nil {
+				db.Close()
+				return nil, err
+			}
+			return db, nil
+		} else {
+			return connections[database], nil
+		}
 	}
 
 	client := Client{
-		config: *c,
-		db:     db,
+		config:        *c,
+		getConnection: getConnection,
 	}
 
-	return &client, nil
+	return &client
 }
 
 //When do we close the connection?

@@ -12,6 +12,10 @@ func dataSourceRedshiftSchema() *schema.Resource {
 		Read: dataSourceRedshiftSchemaReadByName,
 
 		Schema: map[string]*schema.Schema{
+			"database": {
+				Type:     schema.TypeString,
+				Required: true,
+			},
 			"schema_name": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -32,7 +36,12 @@ func dataSourceRedshiftSchemaReadByName(d *schema.ResourceData, meta interface{}
 	)
 
 	name := d.Get("schema_name").(string)
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	err := redshiftClient.QueryRow("select oid, nspowner from pg_namespace where nspname = $1", name).Scan(&oid, &owner)
 

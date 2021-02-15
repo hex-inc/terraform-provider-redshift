@@ -1,9 +1,6 @@
 package redshift
 
 import (
-	"fmt"
-	"log"
-
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/terraform"
 )
@@ -39,12 +36,6 @@ func Provider() terraform.ResourceProvider {
 				Optional:    true,
 				Default:     "require",
 			},
-			"database": {
-				Type:        schema.TypeString,
-				Description: "default database",
-				Optional:    true,
-				Default:     "dev",
-			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"redshift_user":                                redshiftUser(),
@@ -69,22 +60,9 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 		password: d.Get("password").(string),
 		port:     d.Get("port").(string),
 		sslmode:  d.Get("sslmode").(string),
-		database: d.Get("database").(string),
 	}
 
-	log.Println("[INFO] Initializing Redshift client")
-	client, err := config.Client()
-	if err != nil {
-		return nil, err
-	}
-
-	db := client.db
-
-	// DB connection is not opened until the first query.
-	// Test the connection
-	if err = db.Ping(); err != nil {
-		return nil, fmt.Errorf("Redshift connection error: %v", err)
-	}
+	client := config.Client()
 
 	return client, nil
 }

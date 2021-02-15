@@ -22,6 +22,11 @@ func redshiftUser() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"database": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
 			"username": { //This isn't immutable. The usesysid returned should be used as the id
 				Type:     schema.TypeString,
 				Required: true,
@@ -71,8 +76,12 @@ func redshiftUser() *schema.Resource {
 func resourceRedshiftUserExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
 	// Exists - This is called to verify a resource still exists. It is called prior to Read,
 	// and lowers the burden of Read to be able to assume the resource exists.
-	client := meta.(*Client).db
+	client, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
 
+	if dbErr != nil {
+		log.Print(dbErr)
+		return false, dbErr
+	}
 	var name string
 
 	err := client.QueryRow("SELECT usename FROM pg_user_info WHERE usesysid = $1", d.Id()).Scan(&name)
@@ -86,7 +95,12 @@ func resourceRedshiftUserExists(d *schema.ResourceData, meta interface{}) (b boo
 }
 
 func resourceRedshiftUserCreate(d *schema.ResourceData, meta interface{}) error {
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	tx, txErr := redshiftClient.Begin()
 
@@ -167,7 +181,12 @@ func resourceRedshiftUserCreate(d *schema.ResourceData, meta interface{}) error 
 
 func resourceRedshiftUserRead(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 
 	tx, txErr := redshiftClient.Begin()
 
@@ -234,7 +253,12 @@ func readRedshiftUser(d *schema.ResourceData, tx *sql.Tx) error {
 
 func resourceRedshiftUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 	tx, txErr := redshiftClient.Begin()
 
 	if txErr != nil {
@@ -332,7 +356,12 @@ func resetPassword(tx *sql.Tx, d *schema.ResourceData, username string) error {
 
 func resourceRedshiftUserDelete(d *schema.ResourceData, meta interface{}) error {
 
-	redshiftClient := meta.(*Client).db
+	redshiftClient, dbErr := meta.(*Client).getConnection(d.Get("database").(string))
+
+	if dbErr != nil {
+		log.Print(dbErr)
+		return dbErr
+	}
 	redshiftClientConfig := meta.(*Client).config
 
 	tx, txErr := redshiftClient.Begin()
