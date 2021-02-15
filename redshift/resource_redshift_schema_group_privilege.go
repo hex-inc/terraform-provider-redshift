@@ -37,16 +37,6 @@ func redshiftSchemaGroupPrivilege() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"create": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
-			},
-			"usage": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
-			},
 			"select": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -68,6 +58,16 @@ func redshiftSchemaGroupPrivilege() *schema.Resource {
 				Default:  false,
 			},
 			"references": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"create": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"usage": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
@@ -108,10 +108,10 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 		panic(txErr)
 	}
 
-	schemaGrants := validateSchemaGrants(d)
 	grants := validateGrants(d)
+	schemaGrants := validateSchemaGrants(d)
 
-	if len(schemaGrants) == 0 && len(grants) == 0 {
+	if len(grants) == 0 && len(schemaGrants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
@@ -188,8 +188,13 @@ func resourceRedshiftSchemaGroupPrivilegeRead(d *schema.ResourceData, meta inter
 
 func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error {
 	var (
-		usagePrivilege  bool
-		createPrivilege bool
+		usagePrivilege      bool
+		createPrivilege     bool
+		selectPrivilege     int
+		updatePrivilege     int
+		insertPrivilege     int
+		deletePrivilege     int
+		referencesPrivilege int
 	)
 
 	var hasSchemaPrivilegeQuery = `
@@ -217,6 +222,33 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 	d.Set("usage", usagePrivilege)
 	d.Set("create", createPrivilege)
 
+	var hasTablePrivilegeQuery = `
+		SELECT
+			coalesce(floor(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "select",
+			coalesce(floor(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "update",
+			coalesce(floor(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "insert",
+			coalesce(floor(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "delete",
+			coalesce(floor(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "references"
+		FROM
+			pg_user use
+			LEFT JOIN pg_class cls ON cls.relowner = use.usesysid
+		WHERE
+			cls.relnamespace = $1;
+	`
+
+	tablePrivilegesError := tx.QueryRow(hasTablePrivilegeQuery, d.Get("schema_id").(int), d.Get("group_id").(int)).Scan(&selectPrivilege, &updatePrivilege, &insertPrivilege, &deletePrivilege, &referencesPrivilege)
+
+	if tablePrivilegesError != nil && tablePrivilegesError != sql.ErrNoRows {
+		tx.Rollback()
+		return tablePrivilegesError
+	}
+
+	d.Set("select", selectPrivilege == 1)
+	d.Set("insert", insertPrivilege == 1)
+	d.Set("update", updatePrivilege == 1)
+	d.Set("delete", deletePrivilege == 1)
+	d.Set("references", referencesPrivilege == 1)
+
 	return nil
 }
 
@@ -231,7 +263,7 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 	grants := validateGrants(d)
 	schemaGrants := validateSchemaGrants(d)
 
-	if len(schemaGrants) == 0 && len(grants) == 0 {
+	if len(grants) == 0 && len(schemaGrants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
@@ -250,6 +282,7 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 		return groupErr
 	}
 
+	//Would be much nicer to do this with zip if possible
 	if err := updatePrivilege(tx, d, "select", "SELECT", schemaName, groupName); err != nil {
 		tx.Rollback()
 		return err
@@ -270,7 +303,6 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 		tx.Rollback()
 		return err
 	}
-	//Would be much nicer to do this with zip if possible
 	if err := updateSchemaPrivilege(tx, d, "usage", "USAGE", schemaName, groupName); err != nil {
 		tx.Rollback()
 		return err
@@ -327,23 +359,6 @@ func resourceRedshiftSchemaGroupPrivilegeImport(d *schema.ResourceData, meta int
 	return []*schema.ResourceData{d}, nil
 }
 
-func updateSchemaPrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string) error {
-	if !d.HasChange(attribute) {
-		return nil
-	}
-
-	if d.Get(attribute).(bool) {
-		if _, err := tx.Exec("GRANT " + privilege + " ON SCHEMA " + schemaName + " TO GROUP " + groupName); err != nil {
-			return err
-		}
-	} else {
-		if _, err := tx.Exec("REVOKE " + privilege + " ON SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func updatePrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string) error {
 	if !d.HasChange(attribute) {
 		return nil
@@ -355,6 +370,23 @@ func updatePrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privi
 		}
 	} else {
 		if _, err := tx.Exec("REVOKE " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func updateSchemaPrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string) error {
+	if !d.HasChange(attribute) {
+		return nil
+	}
+
+	if d.Get(attribute).(bool) {
+		if _, err := tx.Exec("GRANT " + privilege + " ON SCHEMA " + schemaName + " TO GROUP " + groupName); err != nil {
+			return err
+		}
+	} else {
+		if _, err := tx.Exec("REVOKE " + privilege + " ON SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
 			return err
 		}
 	}
