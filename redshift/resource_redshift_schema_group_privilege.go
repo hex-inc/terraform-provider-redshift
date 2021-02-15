@@ -224,11 +224,11 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 
 	var hasTablePrivilegeQuery = `
 		SELECT
-			coalesce(floor(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "select",
-			coalesce(floor(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "update",
-			coalesce(floor(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "insert",
-			coalesce(floor(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "delete",
-			coalesce(floor(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0) AS "references"
+			coalesce(floor(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "select",
+			coalesce(floor(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "update",
+			coalesce(floor(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "insert",
+			coalesce(floor(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "delete",
+			coalesce(floor(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || $2, 2), '/', 1)), 0, 0, 1))), 0)::integer AS "references"
 		FROM
 			pg_user use
 			LEFT JOIN pg_class cls ON cls.relowner = use.usesysid
