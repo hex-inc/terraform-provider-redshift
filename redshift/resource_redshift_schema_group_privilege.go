@@ -272,7 +272,7 @@ func updateSchemaPrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string,
 	}
 
 	if d.Get(attribute).(bool) {
-		if _, err := tx.Exec("GRANT " + privilege + " ON SCHEMA " + schemaName + " TO  GROUP " + groupName); err != nil {
+		if _, err := tx.Exec("GRANT " + privilege + " ON SCHEMA " + schemaName + " TO GROUP " + groupName); err != nil {
 			return err
 		}
 	} else {

@@ -255,24 +255,32 @@ func resourceRedshiftUserGroupPrivilegeUpdate(d *schema.ResourceData, meta inter
 		return groupErr
 	}
 
+	var username string
+
+	//If no owner is specified it defaults to client user
+	if v, ok := d.GetOk("owner_id"); ok {
+		var usernames = GetUsersnamesForUsesysid(redshiftClient, []interface{}{v.(int)})
+		username = usernames[0]
+	}
+
 	//Would be much nicer to do this with zip if possible
-	if err := updatePrivilege(tx, d, "select", "SELECT", schemaName, groupName); err != nil {
+	if err := updatePrivilege(tx, d, "select", "SELECT", schemaName, groupName, username); err != nil {
 		tx.Rollback()
 		return err
 	}
-	if err := updatePrivilege(tx, d, "insert", "INSERT", schemaName, groupName); err != nil {
+	if err := updatePrivilege(tx, d, "insert", "INSERT", schemaName, groupName, username); err != nil {
 		tx.Rollback()
 		return err
 	}
-	if err := updatePrivilege(tx, d, "update", "UPDATE", schemaName, groupName); err != nil {
+	if err := updatePrivilege(tx, d, "update", "UPDATE", schemaName, groupName, username); err != nil {
 		tx.Rollback()
 		return err
 	}
-	if err := updatePrivilege(tx, d, "delete", "DELETE", schemaName, groupName); err != nil {
+	if err := updatePrivilege(tx, d, "delete", "DELETE", schemaName, groupName, username); err != nil {
 		tx.Rollback()
 		return err
 	}
-	if err := updatePrivilege(tx, d, "references", "REFERENCES", schemaName, groupName); err != nil {
+	if err := updatePrivilege(tx, d, "references", "REFERENCES", schemaName, groupName, username); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -304,12 +312,20 @@ func resourceRedshiftUserGroupPrivilegeDelete(d *schema.ResourceData, meta inter
 		return groupErr
 	}
 
-	if _, err := tx.Exec("REVOKE ALL ON  ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
+	var defaultPrivilegesStatement = "ALTER DEFAULT PRIVILEGES"
+
+	//If no owner is specified it defaults to client user
+	if v, ok := d.GetOk("owner_id"); ok {
+		var usernames = GetUsersnamesForUsesysid(redshiftClient, []interface{}{v.(int)})
+		defaultPrivilegesStatement += " FOR USER " + usernames[0]
+	}
+
+	if _, err := tx.Exec("REVOKE ALL ON ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if _, err := tx.Exec("ALTER DEFAULT PRIVILEGES IN SCHEMA " + schemaName + " REVOKE ALL ON TABLES FROM GROUP " + groupName); err != nil {
+	if _, err := tx.Exec(defaultPrivilegesStatement + " IN SCHEMA " + schemaName + " REVOKE ALL ON TABLES FROM GROUP " + groupName); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -330,23 +346,23 @@ func resourceRedshiftUserGroupPrivilegeImport(d *schema.ResourceData, meta inter
 	return []*schema.ResourceData{d}, nil
 }
 
-func updatePrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string) error {
+func updatePrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string, userName string) error {
 	if !d.HasChange(attribute) {
 		return nil
 	}
 
 	if d.Get(attribute).(bool) {
-		if _, err := tx.Exec("GRANT " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " TO  GROUP " + groupName); err != nil {
+		if _, err := tx.Exec("GRANT " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " TO GROUP " + groupName); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("ALTER DEFAULT PRIVILEGES IN SCHEMA " + schemaName + " GRANT " + privilege + " ON TABLES TO GROUP " + groupName); err != nil {
+		if _, err := tx.Exec("ALTER DEFAULT PRIVILEGES FOR USER " + userName + " IN SCHEMA " + schemaName + " GRANT " + privilege + " ON TABLES TO GROUP " + groupName); err != nil {
 			return err
 		}
 	} else {
 		if _, err := tx.Exec("REVOKE " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("ALTER DEFAULT PRIVILEGES IN SCHEMA " + schemaName + " REVOKE " + privilege + " ON TABLES FROM GROUP " + groupName); err != nil {
+		if _, err := tx.Exec("ALTER DEFAULT PRIVILEGES FOR USER " + userName + " IN SCHEMA " + schemaName + " REVOKE " + privilege + " ON TABLES FROM GROUP " + groupName); err != nil {
 			return err
 		}
 	}
