@@ -47,6 +47,31 @@ func redshiftSchemaGroupPrivilege() *schema.Resource {
 				Optional: true,
 				Default:  false,
 			},
+			"select": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"insert": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"update": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"delete": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"references": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
 		},
 	}
 }
@@ -59,7 +84,7 @@ func resourceRedshiftSchemaGroupPrivilegeExists(d *schema.ResourceData, meta int
 	var privilegeId string
 
 	err := client.QueryRow(`select nsp.oid || '_' || pu.grosysid as id
-		from  pg_group pu, pg_namespace nsp
+		from pg_group pu, pg_namespace nsp
 		where array_to_string(nsp.nspacl, '|') LIKE '%' || 'group ' || pu.groname || '=%'
 			and nsp.oid || '_' || pu.grosysid = $1`,
 		d.Id()).Scan(&privilegeId)
@@ -84,8 +109,9 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 	}
 
 	schemaGrants := validateSchemaGrants(d)
+	grants := validateGrants(d)
 
-	if len(schemaGrants) == 0 {
+	if len(schemaGrants) == 0 && len(grants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
@@ -107,6 +133,16 @@ func resourceRedshiftSchemaGroupPrivilegeCreate(d *schema.ResourceData, meta int
 		log.Print(groupErr)
 		tx.Rollback()
 		return groupErr
+	}
+
+	if len(grants) > 0 {
+		var grantPrivilegeStatement = "GRANT " + strings.Join(grants[:], ",") + " ON ALL TABLES IN SCHEMA " + schemaName + " TO GROUP " + groupName
+
+		if _, err := tx.Exec(grantPrivilegeStatement); err != nil {
+			log.Print(err)
+			tx.Rollback()
+			return err
+		}
 	}
 
 	if len(schemaGrants) > 0 {
@@ -192,9 +228,10 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 		panic(txErr)
 	}
 
+	grants := validateGrants(d)
 	schemaGrants := validateSchemaGrants(d)
 
-	if len(schemaGrants) == 0 {
+	if len(schemaGrants) == 0 && len(grants) == 0 {
 		tx.Rollback()
 		return NewError("Must have at least 1 privilege")
 	}
@@ -213,6 +250,26 @@ func resourceRedshiftSchemaGroupPrivilegeUpdate(d *schema.ResourceData, meta int
 		return groupErr
 	}
 
+	if err := updatePrivilege(tx, d, "select", "SELECT", schemaName, groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := updatePrivilege(tx, d, "insert", "INSERT", schemaName, groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := updatePrivilege(tx, d, "update", "UPDATE", schemaName, groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := updatePrivilege(tx, d, "delete", "DELETE", schemaName, groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := updatePrivilege(tx, d, "references", "REFERENCES", schemaName, groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
 	//Would be much nicer to do this with zip if possible
 	if err := updateSchemaPrivilege(tx, d, "usage", "USAGE", schemaName, groupName); err != nil {
 		tx.Rollback()
@@ -249,6 +306,10 @@ func resourceRedshiftSchemaGroupPrivilegeDelete(d *schema.ResourceData, meta int
 		tx.Rollback()
 		return groupErr
 	}
+	if _, err := tx.Exec("REVOKE ALL ON ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
+		tx.Rollback()
+		return err
+	}
 
 	if _, err := tx.Exec("REVOKE ALL ON SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
 		tx.Rollback()
@@ -283,15 +344,19 @@ func updateSchemaPrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string,
 	return nil
 }
 
-func validateSchemaGrants(d *schema.ResourceData) []string {
-	var grants []string
-
-	if v, ok := d.GetOk("create"); ok && v.(bool) {
-		grants = append(grants, "CREATE")
-	}
-	if v, ok := d.GetOk("usage"); ok && v.(bool) {
-		grants = append(grants, "USAGE")
+func updatePrivilege(tx *sql.Tx, d *schema.ResourceData, attribute string, privilege string, schemaName string, groupName string) error {
+	if !d.HasChange(attribute) {
+		return nil
 	}
 
-	return grants
+	if d.Get(attribute).(bool) {
+		if _, err := tx.Exec("GRANT " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " TO GROUP " + groupName); err != nil {
+			return err
+		}
+	} else {
+		if _, err := tx.Exec("REVOKE " + privilege + " ON ALL TABLES IN SCHEMA " + schemaName + " FROM GROUP " + groupName); err != nil {
+			return err
+		}
+	}
+	return nil
 }

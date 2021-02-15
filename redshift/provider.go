@@ -47,12 +47,12 @@ func Provider() terraform.ResourceProvider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"redshift_user":                   redshiftUser(),
-			"redshift_group":                  redshiftGroup(),
-			"redshift_database":               redshiftDatabase(),
-			"redshift_schema":                 redshiftSchema(),
-			"redshift_group_schema_privilege": redshiftSchemaGroupPrivilege(),
-			"redshift_user_schema_privilege":  redshiftUserGroupPrivilege(),
+			"redshift_user":                                redshiftUser(),
+			"redshift_group":                               redshiftGroup(),
+			"redshift_database":                            redshiftDatabase(),
+			"redshift_schema":                              redshiftSchema(),
+			"redshift_schema_group_privilege":              redshiftSchemaGroupPrivilege(),
+			"redshift_schema_default_user_group_privilege": redshiftSchemaDefaultUserGroupPrivilege(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"redshift_schema": dataSourceRedshiftSchema(),
