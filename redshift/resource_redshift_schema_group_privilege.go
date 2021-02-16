@@ -210,11 +210,11 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 	var (
 		usagePrivilege      bool
 		createPrivilege     bool
-		selectPrivilege     float32
-		updatePrivilege     float32
-		insertPrivilege     float32
-		deletePrivilege     float32
-		referencesPrivilege float32
+		selectPrivilege     *sql.NullFloat64
+		updatePrivilege     *sql.NullFloat64
+		insertPrivilege     *sql.NullFloat64
+		deletePrivilege     *sql.NullFloat64
+		referencesPrivilege *sql.NullFloat64
 	)
 
 	var hasSchemaPrivilegeQuery = `
@@ -244,17 +244,17 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 
 	var hasTablePrivilegeQuery = `
 		SELECT
-			coalesce(avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1)), 0.5) AS "select",
-			coalesce(avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1)), 0.5) AS "update",
-			coalesce(avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1)), 0.5) AS "insert",
-			coalesce(avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1)), 0.5) AS "delete",
-			coalesce(avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1)), 0.5) AS "references"
+			avg(decode(charindex ('r', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1.0)) AS "select",
+			avg(decode(charindex ('w', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1.0)) AS "update",
+			avg(decode(charindex ('a', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1.0)) AS "insert",
+			avg(decode(charindex ('d', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1.0)) AS "delete",
+			avg(decode(charindex ('x', split_part(split_part(array_to_string(cls.relacl, '|'), 'group ' || pg.groname, 2), '/', 1)), 0, 0, 1.0)) AS "references"
 		FROM
 			pg_user use
 			LEFT JOIN pg_class cls ON cls.relowner = use.usesysid
 			CROSS JOIN pg_group pg
 		WHERE
-			cls.relnamespace = $1 AND pg.grosysid = $2;
+			cls.relnamespace = $1 AND pg.grosysid = $2 AND cls.relkind <> 'i';
 	`
 
 	tablePrivilegesError := tx.QueryRow(hasTablePrivilegeQuery, d.Get("schema_id").(int), d.Get("group_id").(int)).Scan(&selectPrivilege, &updatePrivilege, &insertPrivilege, &deletePrivilege, &referencesPrivilege)
@@ -264,44 +264,54 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 		return tablePrivilegesError
 	}
 
-	if selectPrivilege >= 1 {
-		d.Set("select", true)
-	} else if selectPrivilege <= 0 {
-		d.Set("select", false)
-	} else {
-		d.Set("select", !d.Get("select").(bool))
+	if selectPrivilege.Valid {
+		if selectPrivilege.Float64 >= 1 {
+			d.Set("select", true)
+		} else if selectPrivilege.Float64 <= 0 {
+			d.Set("select", false)
+		} else {
+			d.Set("select", !d.Get("select").(bool))
+		}
 	}
 
-	if insertPrivilege >= 1 {
-		d.Set("insert", true)
-	} else if insertPrivilege <= 0 {
-		d.Set("insert", false)
-	} else {
-		d.Set("select", !d.Get("select").(bool))
+	if updatePrivilege.Valid {
+		if updatePrivilege.Float64 >= 1 {
+			d.Set("update", true)
+		} else if updatePrivilege.Float64 <= 0 {
+			d.Set("update", false)
+		} else {
+			d.Set("update", !d.Get("update").(bool))
+		}
 	}
 
-	if updatePrivilege >= 1 {
-		d.Set("update", true)
-	} else if updatePrivilege <= 0 {
-		d.Set("update", false)
-	} else {
-		d.Set("update", !d.Get("update").(bool))
+	if insertPrivilege.Valid {
+		if insertPrivilege.Float64 >= 1 {
+			d.Set("insert", true)
+		} else if insertPrivilege.Float64 <= 0 {
+			d.Set("insert", false)
+		} else {
+			d.Set("insert", !d.Get("insert").(bool))
+		}
 	}
 
-	if deletePrivilege >= 1 {
-		d.Set("delete", true)
-	} else if deletePrivilege <= 0 {
-		d.Set("delete", false)
-	} else {
-		d.Set("delete", !d.Get("delete").(bool))
+	if deletePrivilege.Valid {
+		if deletePrivilege.Float64 >= 1 {
+			d.Set("delete", true)
+		} else if deletePrivilege.Float64 <= 0 {
+			d.Set("delete", false)
+		} else {
+			d.Set("delete", !d.Get("delete").(bool))
+		}
 	}
 
-	if referencesPrivilege >= 1 {
-		d.Set("references", true)
-	} else if referencesPrivilege <= 0 {
-		d.Set("references", false)
-	} else {
-		d.Set("references", !d.Get("references").(bool))
+	if referencesPrivilege.Valid {
+		if referencesPrivilege.Float64 >= 1 {
+			d.Set("references", true)
+		} else if referencesPrivilege.Float64 <= 0 {
+			d.Set("references", false)
+		} else {
+			d.Set("references", !d.Get("references").(bool))
+		}
 	}
 
 	return nil
