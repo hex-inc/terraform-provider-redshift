@@ -25,7 +25,6 @@ func redshiftUser() *schema.Resource {
 			"database": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
 			},
 			"username": { //This isn't immutable. The usesysid returned should be used as the id
 				Type:     schema.TypeString,

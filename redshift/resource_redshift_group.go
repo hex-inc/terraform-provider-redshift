@@ -29,7 +29,6 @@ func redshiftGroup() *schema.Resource {
 			"database": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
 			},
 			"group_name": { //This isn't immutable. The grosysid returned should be used as the id
 				Type:     schema.TypeString,
