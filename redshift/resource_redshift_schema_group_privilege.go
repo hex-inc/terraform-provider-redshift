@@ -252,9 +252,9 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 		FROM
 			pg_user use
 			LEFT JOIN pg_class cls ON cls.relowner = use.usesysid
-			CROSS JOIN pg_group pg ON pg.grosysid = $2
+			CROSS JOIN pg_group pg
 		WHERE
-			cls.relnamespace = $1;
+			cls.relnamespace = $1 AND pg.grosysid = $2;
 	`
 
 	tablePrivilegesError := tx.QueryRow(hasTablePrivilegeQuery, d.Get("schema_id").(int), d.Get("group_id").(int)).Scan(&selectPrivilege, &updatePrivilege, &insertPrivilege, &deletePrivilege, &referencesPrivilege)
