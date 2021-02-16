@@ -210,11 +210,11 @@ func readRedshiftSchemaGroupPrivilege(d *schema.ResourceData, tx *sql.Tx) error 
 	var (
 		usagePrivilege      bool
 		createPrivilege     bool
-		selectPrivilege     *sql.NullFloat64
-		updatePrivilege     *sql.NullFloat64
-		insertPrivilege     *sql.NullFloat64
-		deletePrivilege     *sql.NullFloat64
-		referencesPrivilege *sql.NullFloat64
+		selectPrivilege     sql.NullFloat64
+		updatePrivilege     sql.NullFloat64
+		insertPrivilege     sql.NullFloat64
+		deletePrivilege     sql.NullFloat64
+		referencesPrivilege sql.NullFloat64
 	)
 
 	var hasSchemaPrivilegeQuery = `
